@@ -1,13 +1,13 @@
 bl_info = {
     "name": "Shape Keys Editor",
-    "description": "Sort ShapeKeys and rename with Regex",
+    "description": "Easily edit shape keys in Blender",
     "author": "HahnZhu",
     "version": (1, 0, 0),
     "blender": (2, 80, 0),
     "location": "Properties > Object Data > Shape Keys Editor",
     "warning": "",
-    "wiki_url": "",
-    "tracker_url": "",
+    "wiki_url": "https://github.com/hahnzhu/ShapeKeysEditor",
+    "tracker_url": "https://github.com/hahnzhu/ShapeKeysEditor/issues",
     "category": "Object",
 }
 
