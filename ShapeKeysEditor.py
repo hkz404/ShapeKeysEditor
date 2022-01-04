@@ -1,19 +1,19 @@
 bl_info = {
-    "name": "Shape Keys Editor",
-    "description": "Easily edit shape keys in Blender",
+    "name": "ShapeKeys Editor",
+    "description": "Easily Edit ShapeKeys in Blender",
     "author": "HahnZhu",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (2, 80, 0),
-    "location": "Properties > Object Data > Shape Keys Editor",
+    "location": "Properties > Object Data > ShapeKeys Editor",
     "warning": "",
-    "wiki_url": "https://github.com/hahnzhu/ShapeKeysEditor",
+    "wiki_url": "https://blenderartists.org/t/addon-shapekeys-editor/1320941",
     "tracker_url": "https://github.com/hahnzhu/ShapeKeysEditor/issues",
     "category": "Object",
 }
 
+import os
 import re
 import bpy
-
 
 from bpy.props import (
     StringProperty,
@@ -34,14 +34,14 @@ from bpy.types import (
 
 # fmt: off
 WARNING_TIPS = [
-    "No shape keys of your active object!",
-    "Shape keys' names are not match!",
+    "No ShapeKeys of your active object!",
+    "ShapeKeys' names are not match!",
     "Arkit preset apply sucessfully!",
     "Something wrong happen!",
     "Shapekeys amounts are not match!",
     "Rename operation is done!",
     "Delete operation is done!",
-    "Sort operation is done!"
+    "Sort operation is done!",
 ]
 
 # fmt: off
@@ -58,6 +58,7 @@ TEXTBLOCK_NAME = [
 
 def update_enum(self, context):
     context.scene.skeditor.str_result = ""
+    context.scene.skeditor.str_result_from_file = ""
 
 def sort_sk(sklist):
     mysklist = sklist.copy()
@@ -123,6 +124,16 @@ def delete_sk(sklist):
     bpy.context.object.active_shape_key_index = 0
     return 6
 
+def isTxtFile(context, filepath):
+    skeditor = context.scene.skeditor
+
+    if (os.path.isdir(filepath)):
+        skeditor.str_result_from_file = 'choose file instead of folder'
+        return False
+    elif (os.path.splitext(filepath)[1] != '.txt'):
+        skeditor.str_result_from_file = 'choose file with txt format'
+        return False
+    return True
 
 # ------------------------------------------------------------------------
 #    Scene Properties
@@ -131,12 +142,16 @@ def delete_sk(sklist):
 class SKEDITOR_Properties(PropertyGroup):
 
     bool_show_regex: BoolProperty(name="", description="", default=False)
+    bool_show_external_rename: BoolProperty(name="", description="", default=False)
+    bool_show_external_delete: BoolProperty(name="", description="", default=False)
+    bool_show_external_sort: BoolProperty(name="", description="", default=False)
 
     str_regex: StringProperty(
         name="Regex String",
         description="regex string with python standard, eg: foo[1-9]*bar",
         default="",
         maxlen=1024,
+        update=update_enum
     )
 
     str_replace: StringProperty(
@@ -144,6 +159,7 @@ class SKEDITOR_Properties(PropertyGroup):
         description="the replace string for regex",
         default="",
         maxlen=1024,
+        update=update_enum
     )
 
     str_result: StringProperty(
@@ -153,13 +169,47 @@ class SKEDITOR_Properties(PropertyGroup):
         maxlen=1024,
     )
 
+    str_result_from_file: StringProperty(
+        name="Replace String",
+        description="result of external file apply",
+        default="",
+        maxlen=1024,
+    )
+
+    str_filepath_rename: StringProperty(
+        name="",
+        description="external file path with .txt format",
+        default="",
+        maxlen=1024,
+        subtype="FILE_PATH",
+        update=update_enum
+    )
+
+    str_filepath_delete: StringProperty(
+        name="",
+        description="external file path with .txt format",
+        default="",
+        maxlen=1024,
+        subtype="FILE_PATH",
+        update=update_enum
+    )
+
+    str_filepath_sort: StringProperty(
+        name="",
+        description="external file path with .txt format",
+        default="",
+        maxlen=1024,
+        subtype="FILE_PATH",
+        update=update_enum
+    )
+
     enum_tab: EnumProperty(
-        name="tab",
-        description="operations of shape keys",
+        name="",
+        description="operations of shapekeys",
         items=[
-            ("rename", "Rename", ""),
-            ("delete", "Delete", ""),
-            ("sort", "Sort", ""),
+            ("rename", "Rename", "Rename in TextEditor"),
+            ("delete", "Delete", "Delete in TextEditor"),
+            ("sort", "Sort", "Sort in TextEditor"),
         ],
         update=update_enum
     )
@@ -208,14 +258,41 @@ class SKEDITOR_OT_ApplyRenameSK(Operator):
         final_sk = []
         textblock = bpy.data.texts.get(TEXTBLOCK_NAME[0])
         for line in textblock.lines:
-            if line.body:
-                final_sk.append(line.body)
-
+            if line.body.strip():
+                final_sk.append(line.body.strip())
         try:
             status = rename_sk(sklist=final_sk)
             skeditor.str_result = WARNING_TIPS[status]
         except:
             skeditor.str_result = WARNING_TIPS[3]
+
+        return {"FINISHED"}
+
+class SKEDITOR_OT_ApplyRenameSKWithFile(Operator):
+    bl_idname = "skeditor.apply_rename_shapekeys_with_file"
+    bl_label = "Apply manual rename to shapekeys with file"
+    bl_description = "Apply manual rename to shapekeys with file"
+
+    @classmethod
+    def poll(self, context):
+        return context.object and context.object.data.shape_keys
+
+    def execute(self, context):
+        skeditor = context.scene.skeditor
+        filepath = skeditor.str_filepath_rename
+
+        if isTxtFile(context, filepath):
+            final_sk = []
+            textblock = open(filepath, 'r')
+
+            for line in textblock.readlines():
+                if line.strip():
+                    final_sk.append(line.strip())
+            try:
+                status = rename_sk(sklist=final_sk)
+                skeditor.str_result_from_file = WARNING_TIPS[status]
+            except:
+                skeditor.str_result_from_file = WARNING_TIPS[3]
 
         return {"FINISHED"}
 
@@ -287,14 +364,41 @@ class SKEDITOR_OT_ApplyDeleteSK(Operator):
         final_sk = []
         textblock = bpy.data.texts.get(TEXTBLOCK_NAME[1])
         for line in textblock.lines:
-            if line.body:
-                final_sk.append(line.body)
+            if line.body.strip():
+                final_sk.append(line.body.strip())
 
         try:
             status = delete_sk(sklist=final_sk)
             skeditor.str_result = WARNING_TIPS[status]
         except:
             skeditor.str_result = WARNING_TIPS[3]
+
+        return {"FINISHED"}
+
+class SKEDITOR_OT_ApplyDeleteSKWithFile(Operator):
+    bl_idname = "skeditor.apply_delete_shapekeys_with_file"
+    bl_label = "Apply manual deletion to shapekeys with file"
+    bl_description = "Apply manual deletion to shapekeys with file"
+
+    @classmethod
+    def poll(self, context):
+        return context.object and context.object.data.shape_keys
+
+    def execute(self, context):
+        skeditor = context.scene.skeditor
+        filepath = skeditor.str_filepath_delete
+
+        if isTxtFile(context, filepath):
+            final_sk = []
+            textblock = open(filepath, 'r')
+            for line in textblock.readlines():
+                if line.strip():
+                    final_sk.append(line.strip())
+            try:
+                status = delete_sk(sklist=final_sk)
+                skeditor.str_result_from_file = WARNING_TIPS[status]
+            except:
+                skeditor.str_result_from_file = WARNING_TIPS[3]
 
         return {"FINISHED"}
 
@@ -342,14 +446,41 @@ class SKEDITOR_OT_ApplySortSK(Operator):
         final_sk = []
         textblock = bpy.data.texts.get(TEXTBLOCK_NAME[2])
         for line in textblock.lines:
-            if line.body:
-                final_sk.append(line.body)
+            if line.body.strip():
+                final_sk.append(line.body.strip())
 
         try:
             status = sort_sk(sklist=final_sk)
             skeditor.str_result = WARNING_TIPS[status]
         except:
             skeditor.str_result = WARNING_TIPS[3]
+
+        return {"FINISHED"}
+
+class SKEDITOR_OT_ApplySortSKWithFile(Operator):
+    bl_idname = "skeditor.apply_sort_shapekeys_with_file"
+    bl_label = "Apply manual sort to shapekeys with file"
+    bl_description = "Apply manual sort to shapekeys with file"
+
+    @classmethod
+    def poll(self, context):
+        return context.object and context.object.data.shape_keys
+
+    def execute(self, context):
+        skeditor = context.scene.skeditor
+        filepath = skeditor.str_filepath_sort
+
+        if isTxtFile(context, filepath):
+            final_sk = []
+            textblock = open(filepath, 'r')
+            for line in textblock.readlines():
+                if line.strip():
+                    final_sk.append(line.strip())
+            try:
+                status = sort_sk(sklist=final_sk)
+                skeditor.str_result_from_file = WARNING_TIPS[status]
+            except:
+                skeditor.str_result_from_file = WARNING_TIPS[3]
 
         return {"FINISHED"}
 
@@ -360,7 +491,7 @@ class SKEDITOR_OT_ApplySortSK(Operator):
 # ------------------------------------------------------------------------
 
 class SKEDITOR_PT_MainPanel(Panel):
-    bl_label = "Shape Keys Editor"
+    bl_label = "ShapeKeys Editor"
     bl_idname = "SKEDITOR_PT_MainPanel"
     bl_space_type = "PROPERTIES"
     bl_region_type = "WINDOW"
@@ -372,11 +503,12 @@ class SKEDITOR_PT_MainPanel(Panel):
         skeditor = scene.skeditor
 
         row = layout.row()
-        row.prop(skeditor, "enum_tab", expand=True)
+        row.prop(skeditor, "enum_tab", expand=False)
 
+        # Tab - rename
         if skeditor.enum_tab == "rename":
             row = layout.row()
-            row.operator("skeditor.rename_shapekeys", text="Rename Edit")
+            row.operator("skeditor.rename_shapekeys", text="Edit In TextEditor")
             row.operator("skeditor.apply_rename_shapekeys", text="Apply")
 
             if skeditor.str_result:
@@ -394,9 +526,25 @@ class SKEDITOR_PT_MainPanel(Panel):
                 box.prop(skeditor, "str_replace", text="Replace")
                 box.operator("skeditor.apply_rename_regex", text="Apply")
 
+            layout.prop(skeditor, "bool_show_external_rename", text="Rename by external file")
+            if skeditor.bool_show_external_rename:
+                box = layout.box()
+                box.prop(skeditor, "str_filepath_rename")
+
+                if skeditor.str_result_from_file:
+                    row = box.row()
+                    row.alignment = "CENTER"
+                    if not skeditor.str_result_from_file == WARNING_TIPS[5]:
+                        row.alert = True
+                    row.label(text=skeditor.str_result_from_file)
+
+                box.operator("skeditor.apply_rename_shapekeys_with_file", text="Apply")
+
+
+        # Tab - delete
         elif skeditor.enum_tab == "delete":
             row = layout.row()
-            row.operator("skeditor.delete_shapekeys", text="Delete Edit")
+            row.operator("skeditor.delete_shapekeys", text="Edit In TextEditor")
             row.operator("skeditor.apply_delete_shapekeys", text="Apply")
 
             if skeditor.str_result:
@@ -406,9 +554,24 @@ class SKEDITOR_PT_MainPanel(Panel):
                     row.alert = True
                 row.label(text=skeditor.str_result)
 
+            layout.prop(skeditor, "bool_show_external_delete", text="Delete by external file")
+            if skeditor.bool_show_external_delete:
+                box = layout.box()
+                box.prop(skeditor, "str_filepath_delete")
+
+                if skeditor.str_result_from_file:
+                    row = box.row()
+                    row.alignment = "CENTER"
+                    if not skeditor.str_result_from_file == WARNING_TIPS[6]:
+                        row.alert = True
+                    row.label(text=skeditor.str_result_from_file)
+
+                box.operator("skeditor.apply_delete_shapekeys_with_file", text="Apply")
+
+        # Tab - sort
         elif skeditor.enum_tab == "sort":
             row = layout.row()
-            row.operator("skeditor.sort_shapekeys", text="Sort Edit")
+            row.operator("skeditor.sort_shapekeys", text="Edit In TextEditor")
             row.operator("skeditor.apply_sort_shapekeys", text="Apply")
 
             if skeditor.str_result:
@@ -418,7 +581,19 @@ class SKEDITOR_PT_MainPanel(Panel):
                     row.alert = True
                 row.label(text=skeditor.str_result)
 
+            layout.prop(skeditor, "bool_show_external_sort", text="Sort by external file")
+            if skeditor.bool_show_external_sort:
+                box = layout.box()
+                box.prop(skeditor, "str_filepath_sort")
 
+                if skeditor.str_result_from_file:
+                    row = box.row()
+                    row.alignment = "CENTER"
+                    if not skeditor.str_result_from_file == WARNING_TIPS[7]:
+                        row.alert = True
+                    row.label(text=skeditor.str_result_from_file)
+
+                box.operator("skeditor.apply_sort_shapekeys_with_file", text="Apply")
 
 
 
@@ -435,7 +610,10 @@ classes = (
     SKEDITOR_OT_DeleteSK,
     SKEDITOR_OT_ApplyDeleteSK,
     SKEDITOR_OT_SortSK,
-    SKEDITOR_OT_ApplySortSK
+    SKEDITOR_OT_ApplySortSK,
+    SKEDITOR_OT_ApplyRenameSKWithFile,
+    SKEDITOR_OT_ApplyDeleteSKWithFile,
+    SKEDITOR_OT_ApplySortSKWithFile
 )
 
 def register():
