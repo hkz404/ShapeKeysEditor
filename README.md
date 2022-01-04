@@ -25,4 +25,4 @@ See [Blenderartists threads](https://blenderartists.org/t/addon-shapekeys-editor
 ## Changelog
 
 * 1.0.0 (Aug 6, 2021): First version with rename/sort/delete feature.
-* 1.1.0 (Jan 4, 2022): Add feature for sorting the ShapeKeys with external txt file.
+* 1.1.0 (Jan 4, 2022): Support external txt file to rename/sort/delete ShapeKeys.
